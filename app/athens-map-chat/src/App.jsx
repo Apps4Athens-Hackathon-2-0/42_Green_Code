@@ -9,6 +9,7 @@ import {
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet.heat'; // important: this patches L.heatLayer
 
 // Simple circular marker icon
 const pinIcon = L.divIcon({
@@ -234,6 +235,34 @@ function MapFocus({ locations, selectedLocationId, markerRefs }) {
   return null;
 }
 
+function SCPHeatmap({ locations }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !locations || locations.length === 0) return;
+
+    // Convert locations to [lat, lng, intensity]
+    const points = locations.map((loc) => {
+      const lat = loc.coords[0];
+      const lng = loc.coords[1];
+      const intensity = Math.max(0, Math.min(1, loc.s_cpi / 100)); // normalize 0–1
+      return [lat, lng, intensity];
+    });
+
+    const heatLayer = L.heatLayer(points, {
+      radius: 35, // tweak
+      blur: 25,   // tweak
+      maxZoom: 18,
+    }).addTo(map);
+
+    return () => {
+      map.removeLayer(heatLayer);
+    };
+  }, [map, locations]);
+
+  return null;
+}
+
 function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsLoading }) {
   const athensCenter = [37.9838, 23.7275];
   const markerRefs = useRef({});
@@ -264,6 +293,9 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsL
               attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+
+            {/* 🌡️ S_CPI-based heatmap overlay */}
+            <SCPHeatmap locations={locations} />
 
             {locations.map((loc) => (
               <Marker
