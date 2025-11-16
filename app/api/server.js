@@ -9,43 +9,97 @@ app.use(express.json());
 
 // ----------------- Location data (ONLY on backend) -----------------
 
-const LOCATIONS = [
+// All metrics assumed 0–100, FeasibilityScore 0–1
+const RAW_LOCATIONS = [
   {
     id: 1,
     name: 'Monastiraki',
     coords: [37.976, 23.7258],
     info: 'Dense, highly built-up area with limited street tree cover.',
-    s_cpi: 92, // higher = more urgent need for trees
+    metrics: {
+      LST: 95,               // hotter → more need
+      NDVI: 5,              // lower vegetation → more need (assuming already inverted)
+      PopulationDensity: 92, // more people → more need
+      CCS: 85,               // citizens strongly request cooling
+      FeasibilityScore: 0.8, // how feasible planting is (0–1)
+      AirQuality: 70,        // stored, not yet in formula
+    },
   },
   {
     id: 2,
     name: 'Syntagma Square',
     coords: [37.9755, 23.7348],
     info: 'Central square with heavy traffic and heat-island effects.',
-    s_cpi: 88,
+    metrics: {
+      LST: 82,
+      NDVI: 20,
+      PopulationDensity: 88,
+      CCS: 80,
+      FeasibilityScore: 0.9,
+      AirQuality: 65,
+    },
   },
   {
     id: 3,
     name: 'Panathenaic Stadium',
     coords: [37.968, 23.741],
     info: 'Large open area with some potential for perimeter greening.',
-    s_cpi: 76,
+    metrics: {
+      LST: 75,
+      NDVI: 45,
+      PopulationDensity: 70,
+      CCS: 60,
+      FeasibilityScore: 0.85,
+      AirQuality: 60,
+    },
   },
   {
     id: 4,
     name: 'Acropolis of Athens',
     coords: [37.9715, 23.7267],
     info: 'Historic area; limited planting but high exposure to heat.',
-    s_cpi: 63,
+    metrics: {
+      LST: 80,
+      NDVI: 35,
+      PopulationDensity: 65,
+      CCS: 55,
+      FeasibilityScore: 0.6,
+      AirQuality: 68,
+    },
   },
   {
     id: 5,
     name: 'National Garden',
     coords: [37.9732, 23.737],
     info: 'Already quite green; relatively lower additional need.',
-    s_cpi: 38,
+    metrics: {
+      LST: 60,
+      NDVI: 20,  // here “NDVI” should be interpreted as “greening need” if you use this formula
+      PopulationDensity: 50,
+      CCS: 45,
+      FeasibilityScore: 0.7,
+      AirQuality: 55,
+    },
   },
 ];
+
+function computeSCPI(m) {
+  const base =
+    0.4 * m.LST +
+    0.3 * (100- m.NDVI) +
+    0.2 * m.PopulationDensity +
+    0.1 * m.CCS;
+
+  const s_cpi = base * m.FeasibilityScore;
+
+  // Clamp to 0–100 and round to 1 decimal
+  return Math.max(0, Math.min(100, Math.round(s_cpi * 10) / 10));
+}
+
+const LOCATIONS = RAW_LOCATIONS.map((loc) => ({
+  ...loc,
+  s_cpi: computeSCPI(loc.metrics),
+}));
 
 const PLACE_NAMES = LOCATIONS.map((l) => l.name);
 const PLACE_NAMES_TEXT = PLACE_NAMES.join(', ');
