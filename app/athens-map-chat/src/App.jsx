@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -51,49 +51,83 @@ const pinIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-// --- Chatbot -----------------------------------------------------
+// --- API helper --------------------------------------------------
 
 async function callChatApi(message) {
-  // Example: POST to your backend at /api/chat
-  // Replace this with your own implementation.
-  try {
-    const res = await fetch('http://localhost:3001/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
 
-    if (!res.ok) throw new Error('Network error');
-
-    const data = await res.json();
-    return data.reply; // expect { reply: "text..." }
-  } catch (err) {
-    console.error(err);
-    return "Sorry, I couldn't reach the server. Please try again later.";
+  if (!res.ok) {
+    throw new Error('Network error');
   }
+
+  const data = await res.json();
+  // Expected: { reply: string, placeName: string | null }
+  return data;
 }
+
+// --- Chatbot -----------------------------------------------------
 
 function ChatbotPanel({ locations, onSelectLocation }) {
   const [messages, setMessages] = useState([
     {
       id: 0,
       from: 'bot',
-      text: 'Hi! I am your Athens assistant. Ask me anything or pick a place from the list below 👇',
+      text: 'Hi! Ask me about Athens or any of the places below, and I’ll highlight them on the map 👋',
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const findLocationFromName = (placeName) => {
+    if (!placeName) return null;
+    const target = placeName.toLowerCase();
+
+    return (
+      locations.find(
+        (loc) =>
+          loc.name.toLowerCase() === target ||
+          loc.name.toLowerCase().includes(target) ||
+          target.includes(loc.name.toLowerCase())
+      ) || null
+    );
+  };
+
   const sendMessage = async (text) => {
     const userMsg = { id: Date.now(), from: 'user', text };
-
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
-    const replyText = await callChatApi(text);
+    let reply = '';
+    let placeName = null;
 
-    const botMsg = { id: Date.now() + 1, from: 'bot', text: replyText };
+    try {
+      const result = await callChatApi(text);
+      reply = result.reply;
+      placeName = result.placeName;
+    } catch (err) {
+      console.error(err);
+      reply =
+        "Sorry, I had a problem talking to my brain in the cloud. Please try again in a moment.";
+      placeName = null;
+    }
+
+    let highlightedLoc = findLocationFromName(placeName);
+    if (highlightedLoc) {
+      onSelectLocation(highlightedLoc.id);
+      reply += `\n\n(I’ve highlighted **${highlightedLoc.name}** on the map.)`;
+    }
+
+    const botMsg = {
+      id: Date.now() + 1,
+      from: 'bot',
+      text: reply,
+    };
+
     setMessages((prev) => [...prev, botMsg]);
     setLoading(false);
   };
@@ -106,11 +140,11 @@ function ChatbotPanel({ locations, onSelectLocation }) {
   };
 
   const handleSelectPlace = async (loc) => {
-    // Tell map to focus
+    // Focus the map immediately
     onSelectLocation(loc.id);
 
-    // Optional: also send a “virtual” message
-    const text = `Show me more info about ${loc.name}`;
+    // Also ask the AI, so the user gets info
+    const text = `Tell me about ${loc.name} in Athens.`;
     await sendMessage(text);
   };
 
@@ -134,7 +168,7 @@ function ChatbotPanel({ locations, onSelectLocation }) {
             }`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+              className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
                 m.from === 'user'
                   ? 'bg-blue-500 text-white'
                   : 'bg-slate-800 text-slate-100'
@@ -196,22 +230,21 @@ function ChatbotPanel({ locations, onSelectLocation }) {
 function MapFocus({ locations, selectedLocationId, markerRefs }) {
   const map = useMap();
 
-  if (!selectedLocationId) return null;
+  useEffect(() => {
+    if (!selectedLocationId) return;
+    const loc = locations.find((l) => l.id === selectedLocationId);
+    if (!loc) return;
 
-  const loc = locations.find((l) => l.id === selectedLocationId);
-  if (!loc) return null;
+    map.flyTo(loc.coords, 16, { duration: 1 });
 
-  // Fly to location and open its popup
-  const marker = markerRefs.current[selectedLocationId];
-  if (marker) {
-    marker.openPopup();
-  }
-  map.flyTo(loc.coords, 16, { duration: 1 });
+    const marker = markerRefs.current[selectedLocationId];
+    if (marker) {
+      marker.openPopup();
+    }
+  }, [selectedLocationId, locations, map, markerRefs]);
 
   return null;
 }
-
-import { useRef } from 'react';
 
 function AthensMap({ locations, selectedLocationId, onSelectLocation }) {
   const athensCenter = [37.9838, 23.7275];
@@ -223,7 +256,7 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation }) {
       <div className="flex items-center justify-between border-b bg-white px-4 py-3">
         <h2 className="text-lg font-semibold tracking-wide">Χάρτης (Map)</h2>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 shadow-sm">
-          Click a pin or pick a place from the chatbot.
+          Click a pin or ask the chatbot about a place.
         </div>
       </div>
 
