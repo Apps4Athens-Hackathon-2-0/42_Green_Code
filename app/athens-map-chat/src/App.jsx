@@ -52,7 +52,7 @@ function ChatbotPanel({ locations, onSelectLocation, locationsLoading }) {
     {
       id: 0,
       from: 'bot',
-      text: 'Hi! Ask me about Athens or any of the places below, and I’ll highlight them on the map 👋',
+      text: 'Hi! I’m your urban greening assistant for Athens. Ask about tree-planting needs or pick a location below to see its priority on the map 🌳',
     },
   ]);
   const [input, setInput] = useState('');
@@ -181,7 +181,10 @@ function ChatbotPanel({ locations, onSelectLocation, locationsLoading }) {
               onClick={() => handleSelectPlace(loc)}
               className="w-full rounded-xl bg-slate-800/70 px-3 py-2 text-left text-xs hover:bg-slate-700"
             >
-              {loc.name}
+              <div className="font-semibold">{loc.name}</div>
+              <div className="text-[10px] text-slate-400">
+                S_CPI: {loc.s_cpi} / 100 (tree-planting priority)
+              </div>
             </button>
           ))}
         </div>
@@ -266,7 +269,7 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsL
               <Marker
                 key={loc.id}
                 position={loc.coords}
-                icon={pinIcon}
+                icon={createPinIcon(loc.s_cpi)}
                 title={loc.name}
                 eventHandlers={{
                   click: () => onSelectLocation(loc.id),
@@ -279,6 +282,9 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsL
                   <div className="space-y-1">
                     <div className="font-semibold">{loc.name}</div>
                     <div className="text-xs text-slate-700">{loc.info}</div>
+                    <div className="text-[11px] text-slate-500">
+                      S_CPI (tree-planting need): <span className="font-semibold">{loc.s_cpi}</span> / 100
+                    </div>
                   </div>
                 </Popup>
               </Marker>
@@ -296,6 +302,61 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsL
   );
 }
 
+// Map S_CPI 0–100 → color from green → yellow → red
+function sCpiToColor(s_cpi) {
+  // 0   = green (#00c853)
+  // 50  = yellow (#ffeb3b)
+  // 100 = red (#d50000)
+
+  if (s_cpi <= 50) {
+    // green → yellow
+    const ratio = s_cpi / 50;
+    const r = Math.round(0 + ratio * (255 - 0));       // 0 → 255
+    const g = Math.round(200 + ratio * (235 - 200));   // 200 → 235
+    const b = 83;                                      // constant
+    return `rgb(${r},${g},${b})`;
+  } else {
+    // yellow → red
+    const ratio = (s_cpi - 50) / 50;
+    const r = 255 - Math.round(ratio * (255 - 213));   // 255 → 213
+    const g = 235 - Math.round(ratio * (235 - 0));     // 235 → 0
+    const b = 59 - Math.round(ratio * (59 - 0));       // 59 → 0
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+// Scale S_CPI into icon size
+function sCpiToSize(s_cpi) {
+  const minSize = 12;   // smallest pin
+  const maxSize = 28;   // largest pin
+  return minSize + ((s_cpi / 100) * (maxSize - minSize));
+}
+
+// Create Leaflet icon based on S_CPI
+function createPinIcon(s_cpi) {
+  const size = sCpiToSize(s_cpi);
+  const color = sCpiToColor(s_cpi);
+
+  return L.divIcon({
+    className: '',
+    html: `
+      <div
+        style="
+          width: ${size}px;
+          height: ${size}px;
+          background: ${color};
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 0 6px rgba(0,0,0,0.4);
+        "
+      ></div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+
 // ----------------- Root -----------------
 
 export default function App() {
@@ -308,6 +369,8 @@ export default function App() {
     (async () => {
       try {
         const locs = await fetchLocations();
+        // Defensive: ensure they’re sorted desc by s_cpi, even if server forgets
+        locs.sort((a, b) => b.s_cpi - a.s_cpi);
         setLocations(locs);
       } catch (err) {
         console.error(err);
@@ -317,6 +380,7 @@ export default function App() {
       }
     })();
   }, []);
+
 
   return (
     <div className="h-screen w-screen bg-slate-900 p-4">

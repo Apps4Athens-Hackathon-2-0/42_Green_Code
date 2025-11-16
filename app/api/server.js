@@ -12,33 +12,38 @@ app.use(express.json());
 const LOCATIONS = [
   {
     id: 1,
-    name: 'Acropolis of Athens',
-    coords: [37.9715, 23.7267],
-    info: 'Ancient citadel on a rocky outcrop above Athens.',
+    name: 'Monastiraki',
+    coords: [37.976, 23.7258],
+    info: 'Dense, highly built-up area with limited street tree cover.',
+    s_cpi: 92, // higher = more urgent need for trees
   },
   {
     id: 2,
     name: 'Syntagma Square',
     coords: [37.9755, 23.7348],
-    info: 'Central square, home of the Greek Parliament.',
+    info: 'Central square with heavy traffic and heat-island effects.',
+    s_cpi: 88,
   },
   {
     id: 3,
-    name: 'Monastiraki',
-    coords: [37.976, 23.7258],
-    info: 'Famous for its flea market and vibrant streets.',
+    name: 'Panathenaic Stadium',
+    coords: [37.968, 23.741],
+    info: 'Large open area with some potential for perimeter greening.',
+    s_cpi: 76,
   },
   {
     id: 4,
-    name: 'National Garden',
-    coords: [37.9732, 23.737],
-    info: 'Large public park next to the Parliament.',
+    name: 'Acropolis of Athens',
+    coords: [37.9715, 23.7267],
+    info: 'Historic area; limited planting but high exposure to heat.',
+    s_cpi: 63,
   },
   {
     id: 5,
-    name: 'Panathenaic Stadium',
-    coords: [37.968, 23.741],
-    info: 'Historic stadium, hosted the first modern Olympic Games.',
+    name: 'National Garden',
+    coords: [37.9732, 23.737],
+    info: 'Already quite green; relatively lower additional need.',
+    s_cpi: 38,
   },
 ];
 
@@ -53,7 +58,13 @@ const client = new OpenAI({
 
 // System prompt uses the same location list as the frontend map
 const SYSTEM_PROMPT = `
-You are an assistant helping users explore Athens.
+You are an assistant helping with urban tree-planting priorities in Athens.
+
+Each known location has an S_CPI (Street Canopy Priority Index) between 0 and 100.
+Higher S_CPI means a stronger need for additional tree planting.
+
+The locations and their S_CPI are:
+${LOCATIONS.map(l => `- ${l.name}: S_CPI ${l.s_cpi}`).join('\n')}
 
 You MUST ALWAYS respond ONLY with a JSON object that matches this schema:
 
@@ -62,21 +73,24 @@ You MUST ALWAYS respond ONLY with a JSON object that matches this schema:
   "placeName": string | null
 }
 
-- "reply": a short, friendly natural-language answer.
+- "reply": a short, friendly natural-language answer about tree-planting need,
+  S_CPI, heat, or greening opportunities.
 - "placeName": either:
     - EXACTLY one of: ${PLACE_NAMES_TEXT}, or
     - null when no specific place from that list is clearly referenced.
 
-If the user is asking about one of those places (even approximately, like "acropolis" or "syntagma"),
+If the user is asking about one of those places (even approximately, like "monastiraki" or "syntagma"),
 map it to the exact full name from the list above.
 Do NOT include any extra fields.
 `;
+
 
 // ----------------- Routes -----------------
 
 // Locations API – frontend gets all pins from here
 app.get('/api/locations', (req, res) => {
-  res.json({ locations: LOCATIONS });
+  const sorted = [...LOCATIONS].sort((a, b) => b.s_cpi - a.s_cpi);
+  res.json({ locations: sorted });
 });
 
 // Chat API – returns { reply, placeName }
