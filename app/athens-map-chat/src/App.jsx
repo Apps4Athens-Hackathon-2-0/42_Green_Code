@@ -49,7 +49,7 @@ async function fetchLocations() {
 
 // ----------------- Chatbot -----------------
 
-function ChatbotPanel({ locations, onSelectLocation, locationsLoading, onLocationsUpdated }) {
+function ChatbotPanel({ locations, onSelectLocation, locationsLoading, onLocationsUpdated, onReport }) {
   const [messages, setMessages] = useState([
     {
       id: 0,
@@ -114,6 +114,7 @@ function ChatbotPanel({ locations, onSelectLocation, locationsLoading, onLocatio
     // ⚠️ If this was a cooling problem report, ask the app to refresh locations
     if (reportType === 'cooling_problem' && typeof onLocationsUpdated === 'function') {
       onLocationsUpdated();
+      // onReport(); 
       if (highlightedLoc) {
         reply += `\n\nYour report increases the Citizen Cooling Score for this area, which raises its priority for new trees. 🌳`;
       }
@@ -147,10 +148,7 @@ function ChatbotPanel({ locations, onSelectLocation, locationsLoading, onLocatio
     <div className="flex h-full flex-col bg-slate-900 text-slate-50">
       {/* Header */}
       <div className="border-b border-slate-800 px-4 py-3">
-        <h1 className="text-lg font-semibold tracking-wide">Chatbot</h1>
-        <p className="text-xs text-slate-400">
-          Ask about Athens or tap a place to jump on the map.
-        </p>
+        <h1 className="text-lg font-semibold tracking-wide">Athens Cooling AI</h1>
       </div>
 
       {/* Messages */}
@@ -176,36 +174,6 @@ function ChatbotPanel({ locations, onSelectLocation, locationsLoading, onLocatio
         {loading && (
           <div className="text-xs text-slate-400">Thinking…</div>
         )}
-      </div>
-
-      {/* Places list */}
-      <div className="border-t border-slate-800 px-3 py-2 max-h-40 overflow-y-auto">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Places in Athens
-        </div>
-        {locationsLoading && (
-          <div className="text-xs text-slate-500">Loading places…</div>
-        )}
-        {!locationsLoading && locations.length === 0 && (
-          <div className="text-xs text-slate-500">
-            No places available from the API.
-          </div>
-        )}
-        <div className="space-y-1">
-          {locations.map((loc) => (
-            <button
-              key={loc.id}
-              type="button"
-              onClick={() => handleSelectPlace(loc)}
-              className="w-full rounded-xl bg-slate-800/70 px-3 py-2 text-left text-xs hover:bg-slate-700"
-            >
-              <div className="font-semibold">{loc.name}</div>
-              <div className="text-[10px] text-slate-400">
-                S_CPI: {loc.s_cpi} / 100 (tree-planting priority)
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Input */}
@@ -280,7 +248,7 @@ function SCPHeatmap({ locations }) {
   return null;
 }
 
-function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsLoading }) {
+function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsLoading, reportCount }) {
   const athensCenter = [37.9838, 23.7275];
   const markerRefs = useRef({});
 
@@ -289,9 +257,7 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsL
       {/* Header */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-3">
         <h2 className="text-lg font-semibold tracking-wide">Χάρτης (Map)</h2>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 shadow-sm">
-          Click a pin or ask the chatbot about a place.
-        </div>
+        <h2 className="text-lg font-semibold tracking-wide">Πόντοι Επιβράβευσης: {reportCount}</h2>
       </div>
 
       <div className="flex-1">
@@ -428,6 +394,8 @@ export default function App() {
   const [locationsError, setLocationsError] = useState(null);
   const [selectedLocationId, setSelectedLocationId] = useState(null);
 
+  const [reportCount, setReportCount] = useState(2); // 👈 NEW
+
   const reloadLocations = async () => {
     try {
       setLocationsLoading(true);
@@ -463,6 +431,7 @@ export default function App() {
               locationsLoading={locationsLoading}
               onSelectLocation={setSelectedLocationId}
               onLocationsUpdated={reloadLocations}
+              onReport={() => setReportCount((c) => c + 1)}   // 👈 NEW
             />
           )}
         </div>
@@ -479,6 +448,7 @@ export default function App() {
               locationsLoading={locationsLoading}
               selectedLocationId={selectedLocationId}
               onSelectLocation={setSelectedLocationId}
+              reportCount={reportCount}                        // 👈 NEW
             />
           )}
         </div>
