@@ -225,14 +225,14 @@ app.post('/api/chat', async (req, res) => {
         let delta;
         switch (parsed.reportIntensity) {
           case 'high':
-            delta = 10;
+            delta = 2;
             break;
           case 'medium':
-            delta = 6;
+            delta = 1;
             break;
           case 'low':
           default:
-            delta = 3;
+            delta = 0.1;
             break;
         }
 
