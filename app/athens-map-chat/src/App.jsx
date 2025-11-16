@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState, useRef, useEffect } from 'react';
 import {
   MapContainer,
@@ -9,41 +10,7 @@ import {
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// --- Shared data -------------------------------------------------
-
-const ATHENS_LOCATIONS = [
-  {
-    id: 1,
-    name: 'Acropolis of Athens',
-    coords: [37.9715, 23.7267],
-    info: 'Ancient citadel on a rocky outcrop above Athens.',
-  },
-  {
-    id: 2,
-    name: 'Syntagma Square',
-    coords: [37.9755, 23.7348],
-    info: 'Central square, home of the Greek Parliament.',
-  },
-  {
-    id: 3,
-    name: 'Monastiraki',
-    coords: [37.976, 23.7258],
-    info: 'Famous for its flea market and vibrant streets.',
-  },
-  {
-    id: 4,
-    name: 'National Garden',
-    coords: [37.9732, 23.737],
-    info: 'Large public park next to the Parliament.',
-  },
-  {
-    id: 5,
-    name: 'Panathenaic Stadium',
-    coords: [37.968, 23.741],
-    info: 'Historic stadium, hosted the first modern Olympic Games.',
-  },
-];
-
+// Simple circular marker icon
 const pinIcon = L.divIcon({
   className:
     'bg-blue-600 rounded-full border-2 border-white shadow-md w-4 h-4',
@@ -51,7 +18,7 @@ const pinIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-// --- API helper --------------------------------------------------
+// ----------------- API helpers -----------------
 
 async function callChatApi(message) {
   const res = await fetch('/api/chat', {
@@ -69,9 +36,18 @@ async function callChatApi(message) {
   return data;
 }
 
-// --- Chatbot -----------------------------------------------------
+async function fetchLocations() {
+  const res = await fetch('/api/locations');
+  if (!res.ok) {
+    throw new Error('Failed to load locations');
+  }
+  const data = await res.json();
+  return data.locations; // [{ id, name, coords, info }, ...]
+}
 
-function ChatbotPanel({ locations, onSelectLocation }) {
+// ----------------- Chatbot -----------------
+
+function ChatbotPanel({ locations, onSelectLocation, locationsLoading }) {
   const [messages, setMessages] = useState([
     {
       id: 0,
@@ -109,6 +85,9 @@ function ChatbotPanel({ locations, onSelectLocation }) {
       const result = await callChatApi(text);
       reply = result.reply;
       placeName = result.placeName;
+      console.log('API result:', result, typeof result);
+      console.log('Reply:', reply);
+      console.log('Determined placeName:', placeName);
     } catch (err) {
       console.error(err);
       reply =
@@ -140,10 +119,8 @@ function ChatbotPanel({ locations, onSelectLocation }) {
   };
 
   const handleSelectPlace = async (loc) => {
-    // Focus the map immediately
+    if (!loc) return;
     onSelectLocation(loc.id);
-
-    // Also ask the AI, so the user gets info
     const text = `Tell me about ${loc.name} in Athens.`;
     await sendMessage(text);
   };
@@ -188,6 +165,14 @@ function ChatbotPanel({ locations, onSelectLocation }) {
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
           Places in Athens
         </div>
+        {locationsLoading && (
+          <div className="text-xs text-slate-500">Loading places…</div>
+        )}
+        {!locationsLoading && locations.length === 0 && (
+          <div className="text-xs text-slate-500">
+            No places available from the API.
+          </div>
+        )}
         <div className="space-y-1">
           {locations.map((loc) => (
             <button
@@ -225,7 +210,7 @@ function ChatbotPanel({ locations, onSelectLocation }) {
   );
 }
 
-// --- Map helpers -------------------------------------------------
+// ----------------- Map helpers -----------------
 
 function MapFocus({ locations, selectedLocationId, markerRefs }) {
   const map = useMap();
@@ -246,7 +231,7 @@ function MapFocus({ locations, selectedLocationId, markerRefs }) {
   return null;
 }
 
-function AthensMap({ locations, selectedLocationId, onSelectLocation }) {
+function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsLoading }) {
   const athensCenter = [37.9838, 23.7275];
   const markerRefs = useRef({});
 
@@ -261,73 +246,110 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation }) {
       </div>
 
       <div className="flex-1">
-        <MapContainer
-          center={athensCenter}
-          zoom={14}
-          scrollWheelZoom={true}
-          className="h-full w-full"
-        >
-          <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+        {locationsLoading ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            Loading map locations…
+          </div>
+        ) : (
+          <MapContainer
+            center={athensCenter}
+            zoom={14}
+            scrollWheelZoom={true}
+            className="h-full w-full"
+          >
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
-          {locations.map((loc) => (
-            <Marker
-              key={loc.id}
-              position={loc.coords}
-              icon={pinIcon}
-              title={loc.name}
-              eventHandlers={{
-                click: () => onSelectLocation(loc.id),
-              }}
-              ref={(ref) => {
-                if (ref) markerRefs.current[loc.id] = ref;
-              }}
-            >
-              <Popup>
-                <div className="space-y-1">
-                  <div className="font-semibold">{loc.name}</div>
-                  <div className="text-xs text-slate-700">{loc.info}</div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+            {locations.map((loc) => (
+              <Marker
+                key={loc.id}
+                position={loc.coords}
+                icon={pinIcon}
+                title={loc.name}
+                eventHandlers={{
+                  click: () => onSelectLocation(loc.id),
+                }}
+                ref={(ref) => {
+                  if (ref) markerRefs.current[loc.id] = ref;
+                }}
+              >
+                <Popup>
+                  <div className="space-y-1">
+                    <div className="font-semibold">{loc.name}</div>
+                    <div className="text-xs text-slate-700">{loc.info}</div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
 
-          <MapFocus
-            locations={locations}
-            selectedLocationId={selectedLocationId}
-            markerRefs={markerRefs}
-          />
-        </MapContainer>
+            <MapFocus
+              locations={locations}
+              selectedLocationId={selectedLocationId}
+              markerRefs={markerRefs}
+            />
+          </MapContainer>
+        )}
       </div>
     </div>
   );
 }
 
-// --- Root --------------------------------------------------------
+// ----------------- Root -----------------
 
 export default function App() {
+  const [locations, setLocations] = useState([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState(null);
   const [selectedLocationId, setSelectedLocationId] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const locs = await fetchLocations();
+        setLocations(locs);
+      } catch (err) {
+        console.error(err);
+        setLocationsError('Failed to load locations from the API.');
+      } finally {
+        setLocationsLoading(false);
+      }
+    })();
+  }, []);
 
   return (
     <div className="h-screen w-screen bg-slate-900 p-4">
       <div className="flex h-full overflow-hidden rounded-3xl bg-slate-950 shadow-2xl ring-1 ring-slate-800">
         {/* Left: Chatbot */}
         <div className="w-full max-w-xs border-r border-slate-800">
-          <ChatbotPanel
-            locations={ATHENS_LOCATIONS}
-            onSelectLocation={setSelectedLocationId}
-          />
+          {locationsError ? (
+            <div className="flex h-full items-center justify-center px-4 text-sm text-red-400">
+              {locationsError}
+            </div>
+          ) : (
+            <ChatbotPanel
+              locations={locations}
+              locationsLoading={locationsLoading}
+              onSelectLocation={setSelectedLocationId}
+            />
+          )}
         </div>
 
         {/* Right: Map */}
         <div className="flex-1">
-          <AthensMap
-            locations={ATHENS_LOCATIONS}
-            selectedLocationId={selectedLocationId}
-            onSelectLocation={setSelectedLocationId}
-          />
+          {locationsError ? (
+            <div className="flex h-full items-center justify-center text-sm text-red-500">
+              {locationsError}
+            </div>
+          ) : (
+            <AthensMap
+              locations={locations}
+              locationsLoading={locationsLoading}
+              selectedLocationId={selectedLocationId}
+              onSelectLocation={setSelectedLocationId}
+            />
+          )}
         </div>
       </div>
     </div>
