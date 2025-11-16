@@ -17,8 +17,8 @@ const RAW_LOCATIONS = [
     coords: [37.976, 23.7258],
     info: 'Dense, highly built-up area with limited street tree cover.',
     metrics: {
-      LST: 95,               // hotter → more need
-      NDVI: 5,              // lower vegetation → more need (assuming already inverted)
+      LST: 98,               // hotter → more need
+      NDVI: 1,              // lower vegetation → more need (assuming already inverted)
       PopulationDensity: 92, // more people → more need
       CCS: 85,               // citizens strongly request cooling
       FeasibilityScore: 0.8, // how feasible planting is (0–1)

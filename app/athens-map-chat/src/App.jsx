@@ -328,22 +328,26 @@ function AthensMap({ locations, selectedLocationId, onSelectLocation, locationsL
                 }}
               >
                 <Popup>
-                  <div className="space-y-1">
-                    <div className="font-semibold">{loc.name}</div>
-                    <div className="text-xs text-slate-700">{loc.info}</div>
-                    <div className="text-[11px] text-slate-500">
-                      S_CPI (tree-planting need): <strong>{loc.s_cpi}</strong> / 100
+                  <div className="space-y-2 text-[14px] leading-snug">
+                    <div className="font-semibold text-[16px]">{loc.name}</div>
+
+                    <div className="text-slate-700 text-[13px]">
+                      {loc.info}
                     </div>
-                    {loc.metrics && (
-                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
-                        <span>LST: {loc.metrics.LST}</span>
-                        <span>NDVI: {loc.metrics.NDVI}</span>
-                        <span>Pop. Density: {loc.metrics.PopulationDensity}</span>
-                        <span>CCS: {loc.metrics.CCS}</span>
-                        <span>Feasibility: {loc.metrics.FeasibilityScore}</span>
-                        <span>Air Quality: {loc.metrics.AirQuality}</span>
-                      </div>
-                    )}
+
+                    <div className="pt-1 text-[13px] text-slate-600 font-medium">
+                      S_CPI (tree-planting need): 
+                      <span className="font-bold text-[15px]"> {loc.s_cpi}</span> / 100
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-y-1 text-[12px] text-slate-500">
+                      <div>LST: <span className="font-semibold">{loc.metrics.LST}</span></div>
+                      <div>NDVI: <span className="font-semibold">{loc.metrics.NDVI}</span></div>
+                      <div>Pop. Density: <span className="font-semibold">{loc.metrics.PopulationDensity}</span></div>
+                      <div>CCS: <span className="font-semibold">{loc.metrics.CCS}</span></div>
+                      <div>Feasibility: <span className="font-semibold">{loc.metrics.FeasibilityScore}</span></div>
+                      <div>Air Quality: <span className="font-semibold">{loc.metrics.AirQuality}</span></div>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
