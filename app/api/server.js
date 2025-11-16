@@ -124,19 +124,31 @@ You MUST ALWAYS respond ONLY with a JSON object that matches this schema:
 
 {
   "reply": string,
-  "placeName": string | null
+  "placeName": string | null,
+  "reportType": "cooling_problem" | "none",
+  "reportIntensity": "low" | "medium" | "high" | null
 }
 
-- "reply": a short, friendly natural-language answer about tree-planting need,
-  S_CPI, heat, or greening opportunities.
-- "placeName": either:
-    - EXACTLY one of: ${PLACE_NAMES_TEXT}, or
-    - null when no specific place from that list is clearly referenced.
+Rules:
+- "reply": a short, friendly natural-language answer about tree-planting, S_CPI,
+  and / or the situation the user describes.
+- "placeName":
+    - EXACTLY one of: ${PLACE_NAMES_TEXT} when the user is clearly talking about
+      one of those places (even with slightly different spelling), OR
+    - null otherwise.
+- "reportType":
+    - "cooling_problem" when the user is REPORTING that a place feels too hot,
+      lacks shade, needs trees, or has a cooling-related problem.
+    - "none" for general questions, explanations, or anything not a report.
+- "reportIntensity":
+    - When "reportType" = "cooling_problem", choose "low", "medium", or "high"
+      based on how strong/urgent the problem description is.
+      E.g. "a bit hot" → "low"; "very hot", "unbearable", "we're roasting" → "high".
+    - When "reportType" = "none", MUST be null.
 
-If the user is asking about one of those places (even approximately, like "monastiraki" or "syntagma"),
-map it to the exact full name from the list above.
 Do NOT include any extra fields.
 `;
+
 
 
 // ----------------- Routes -----------------
@@ -161,7 +173,7 @@ app.post('/api/chat', async (req, res) => {
       response_format: {
         type: 'json_schema',
         json_schema: {
-          name: 'ChatWithPlace',
+          name: 'ChatWithPlaceAndReports',
           strict: true,
           schema: {
             type: 'object',
@@ -170,8 +182,18 @@ app.post('/api/chat', async (req, res) => {
               placeName: {
                 anyOf: [{ type: 'string' }, { type: 'null' }],
               },
+              reportType: {
+                type: 'string',
+                enum: ['cooling_problem', 'none'],
+              },
+              reportIntensity: {
+                anyOf: [
+                  { type: 'string', enum: ['low', 'medium', 'high'] },
+                  { type: 'null' },
+                ],
+              },
             },
-            required: ['reply', 'placeName'],
+            required: ['reply', 'placeName', 'reportType', 'reportIntensity'],
             additionalProperties: false,
           },
         },
@@ -180,22 +202,61 @@ app.post('/api/chat', async (req, res) => {
 
     const raw = response.choices[0].message.content;
 
+    console.log('Received from OpenAI:', raw);
+
     let parsed;
     try {
-        console.log('Raw response from model:', raw);
       parsed = JSON.parse(raw);
     } catch (e) {
-      console.error('Failed to parse JSON from model:', raw);
+      console.error('Failed to parse JSON from model:', e);
       parsed = { reply: raw, placeName: null };
+    }
+
+    // --- Apply citizen report: bump CCS & recompute S_CPI ---
+    if (parsed.placeName && parsed.reportType === 'cooling_problem') {
+      const loc =
+        LOCATIONS.find((l) => l.name === parsed.placeName) ||
+        LOCATIONS.find(
+          (l) => l.name.toLowerCase() === parsed.placeName.toLowerCase()
+        );
+
+        console.log('Applying report to location:', loc);
+      if (loc) {
+        let delta;
+        switch (parsed.reportIntensity) {
+          case 'high':
+            delta = 10;
+            break;
+          case 'medium':
+            delta = 6;
+            break;
+          case 'low':
+          default:
+            delta = 3;
+            break;
+        }
+
+        loc.metrics.CCS = Math.max(
+          0,
+          Math.min(100, loc.metrics.CCS + delta)
+        );
+        loc.s_cpi = computeSCPI(loc.metrics);
+
+        console.log(
+          `Updated CCS for ${loc.name}: CCS=${loc.metrics.CCS}, S_CPI=${loc.s_cpi}`
+        );
+      }
     }
 
     // Frontend expects: { reply, placeName }
     res.json(parsed);
   } catch (err) {
-    console.error('OpenAI error:', err);
+    console.error('OpenAI /api/chat error:', err);
     res.status(500).json({
       reply: "Sorry, I couldn't reach the AI server. Please try again later.",
       placeName: null,
+      reportType: 'none',
+      reportIntensity: null,
     });
   }
 });

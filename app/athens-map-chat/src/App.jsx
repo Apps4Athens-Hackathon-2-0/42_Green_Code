@@ -33,7 +33,8 @@ async function callChatApi(message) {
   }
 
   const data = await res.json();
-  // Expected: { reply: string, placeName: string | null }
+  console.log('API response data:', data);
+  // data: { reply, placeName, reportType, reportIntensity }
   return data;
 }
 
@@ -48,7 +49,7 @@ async function fetchLocations() {
 
 // ----------------- Chatbot -----------------
 
-function ChatbotPanel({ locations, onSelectLocation, locationsLoading }) {
+function ChatbotPanel({ locations, onSelectLocation, locationsLoading, onLocationsUpdated }) {
   const [messages, setMessages] = useState([
     {
       id: 0,
@@ -81,25 +82,41 @@ function ChatbotPanel({ locations, onSelectLocation, locationsLoading }) {
 
     let reply = '';
     let placeName = null;
+    let reportType = 'none';
+    let reportIntensity = null;
 
     try {
       const result = await callChatApi(text);
       reply = result.reply;
       placeName = result.placeName;
+      reportType = result.reportType || 'none';
+      reportIntensity = result.reportIntensity || null;
       console.log('API result:', result, typeof result);
       console.log('Reply:', reply);
       console.log('Determined placeName:', placeName);
+      console.log('Determined reportType:', reportType);
+      console.log('Determined reportIntensity:', reportIntensity);
     } catch (err) {
       console.error(err);
       reply =
         "Sorry, I had a problem talking to my brain in the cloud. Please try again in a moment.";
       placeName = null;
+      reportType = 'none';
+      reportIntensity = null;
     }
 
     let highlightedLoc = findLocationFromName(placeName);
     if (highlightedLoc) {
       onSelectLocation(highlightedLoc.id);
       reply += `\n\n(I’ve highlighted **${highlightedLoc.name}** on the map.)`;
+    }
+
+    // ⚠️ If this was a cooling problem report, ask the app to refresh locations
+    if (reportType === 'cooling_problem' && typeof onLocationsUpdated === 'function') {
+      onLocationsUpdated();
+      if (highlightedLoc) {
+        reply += `\n\nYour report increases the Citizen Cooling Score for this area, which raises its priority for new trees. 🌳`;
+      }
     }
 
     const botMsg = {
@@ -407,20 +424,23 @@ export default function App() {
   const [locationsError, setLocationsError] = useState(null);
   const [selectedLocationId, setSelectedLocationId] = useState(null);
 
+  const reloadLocations = async () => {
+    try {
+      setLocationsLoading(true);
+      const locs = await fetchLocations();
+      locs.sort((a, b) => b.s_cpi - a.s_cpi);
+      setLocations(locs);
+      setLocationsError(null);
+    } catch (err) {
+      console.error(err);
+      setLocationsError('Failed to load locations from the API.');
+    } finally {
+      setLocationsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const locs = await fetchLocations();
-        // Defensive: ensure they’re sorted desc by s_cpi, even if server forgets
-        locs.sort((a, b) => b.s_cpi - a.s_cpi);
-        setLocations(locs);
-      } catch (err) {
-        console.error(err);
-        setLocationsError('Failed to load locations from the API.');
-      } finally {
-        setLocationsLoading(false);
-      }
-    })();
+    reloadLocations();
   }, []);
 
 
@@ -438,6 +458,7 @@ export default function App() {
               locations={locations}
               locationsLoading={locationsLoading}
               onSelectLocation={setSelectedLocationId}
+              onLocationsUpdated={reloadLocations}
             />
           )}
         </div>
